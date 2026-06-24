@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>경구알약 불량 탐지 — 모델 학습·테스트 결과 보고서</title>
+<style>
+  :root{--fg:#1a1a1e;--mut:#5c616b;--line:#dcdfe5;--bg:#f5f7fa;--acc:#2456a6;--ok:#1a7f4b;--warn:#b4690e;--bad:#c0392b}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,'Segoe UI','Malgun Gothic',sans-serif;color:var(--fg);max-width:940px;
+       margin:0 auto;padding:36px 24px;line-height:1.7;font-size:15px}
+  h1{font-size:27px;border-bottom:3px solid var(--acc);padding-bottom:10px;margin-bottom:4px}
+  h2{font-size:21px;margin-top:38px;border-left:5px solid var(--acc);padding-left:11px}
+  h3{font-size:16.5px;margin-top:24px}
+  .sub{color:var(--mut);font-size:13.5px;margin-top:0}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;margin:12px 0}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--bg);font-weight:600}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  .kpis{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0}
+  .kpi{flex:1 1 150px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
+  .kpi .v{font-size:25px;font-weight:700;color:var(--acc)}
+  .kpi .l{font-size:12.5px;color:var(--mut)}
+  .note{background:var(--bg);border-left:4px solid #9aa3b2;padding:10px 14px;border-radius:0 6px 6px 0;font-size:13.5px;margin:12px 0}
+  .warn{background:#fff8ef;border-left-color:var(--warn)}
+  .ok{background:#edfaf2;border-left-color:var(--ok)}
+  code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  figure{margin:16px 0;text-align:center}
+  figure img{max-width:100%;border:1px solid var(--line);border-radius:8px}
+  figcaption{font-size:12.5px;color:var(--mut);margin-top:6px}
+  .bad{color:var(--bad);font-weight:600}.good{color:var(--ok);font-weight:600}
+  @media print{body{padding:0}h2{break-after:avoid}figure{break-inside:avoid}}
+</style>
+
+<h1>경구알약 불량 탐지 — 모델 학습·테스트 결과 보고서</h1>
+<p class="sub">2단계 캐스케이드(YOLO 약종 식별 → 약종별 PatchCore 이상탐지) · 200종 SKU · 평가 GPU: NVIDIA L4 ·
+불량 정의에서 <b>blur(흐림)는 촬영 아티팩트로 제외</b></p>
+
+<h2>1. 개요 및 목적</h2>
+<p>경구 알약 이미지를 입력받아 <b>① 어떤 약인지 식별</b>하고 <b>② 정상/불량을 판정</b>하는 2단계 파이프라인을
+200종 약품 전체로 학습·평가하였다. 핵심 목적은 정상 데이터만으로 학습하는 이상탐지(PatchCore)가
+<b>합성으로 생성한 불량</b>을 실제로 탐지하는지를 정량 검증하는 것이다.</p>
+<p class="note"><b>불량 정의:</b> 생성 결함 6종 중 <b>blur(흐림)는 제품 결함이 아니라 촬영 품질 문제</b>이므로
+불량 지표에서 제외하고, 실질 불량 <b>5종(깨짐·오염·균열·눌림·변색)</b>으로 정확도를 산출한다.</p>
+<div class="kpis">
+  <div class="kpi"><div class="v">99.96%</div><div class="l">YOLO 약종 식별 (23,991/24,000)</div></div>
+  <div class="kpi"><div class="v">0.982</div><div class="l">PatchCore 평균 AUROC</div></div>
+  <div class="kpi"><div class="v">94.8%</div><div class="l">불량 탐지율 (3,793/4,000)</div></div>
+  <div class="kpi"><div class="v">200</div><div class="l">학습된 PatchCore 약종 수</div></div>
+</div>
+
+<h2>2. 데이터 설명 및 구조</h2>
+<p>출처는 경구약제 스튜디오 촬영 이미지(손바닥 위 단일 정제, 약 위치 bounding box 포함)이며,
+정상 이미지를 바탕으로 결함을 합성하여 불량 데이터를 생성하였다.</p>
+<table>
+  <tr><th>항목</th><th>내용</th></tr>
+  <tr><td>약종(SKU) 수</td><td>200종 (식별자 <code>K-xxxxxx</code>, 약품명은 별도 매핑)</td></tr>
+  <tr><td>약종당 이미지</td><td>124장 = 정상 100 + 합성 결함 24(6종×4)</td></tr>
+  <tr><td>전체 이미지</td><td>24,800장 (정상 20,000 + 결함 4,800)</td></tr>
+  <tr><td><b>분석 대상 불량</b></td><td><b>5종 4,000장</b> (blur 800장은 불량에서 제외)</td></tr>
+  <tr><td>형식 / ROI</td><td>PNG, 약 위치 <code>bbox=[x,y,w,h]</code> 제공(이상탐지 ROI 크롭에 사용)</td></tr>
+</table>
+<h3>2.1 라벨 구조 (CSV 주요 컬럼)</h3>
+<table>
+  <tr><th>컬럼</th><th>의미</th></tr>
+  <tr><td><code>drug_N</code></td><td>약종 코드(SKU) = 분류 라벨</td></tr>
+  <tr><td><code>file_name</code> / <code>defect_type</code></td><td>파일명(불량은 접미사 <code>_crack</code> 등) / 정상·결함 유형</td></tr>
+  <tr><td><code>label</code></td><td>불량 여부(True/False)</td></tr>
+  <tr><td><code>bbox</code> / <code>dl_name</code></td><td>알약 영역 좌표 / 사람이 읽는 약품명</td></tr>
+</table>
+<h3>2.2 학습/테스트 데이터 구성</h3>
+<p class="note"><b>핵심 원칙:</b> PatchCore는 <b>정상만</b> 메모리에 담는 one-class 방식이므로 불량은 <b>평가에만</b> 사용한다.</p>
+<table>
+  <tr><th>모델</th><th>학습(train)</th><th>평가(test)</th></tr>
+  <tr><td>YOLO 식별기</td><td>정상 이미지(검출 학습)</td><td>전체 이미지의 약종 식별 정확도</td></tr>
+  <tr><td>PatchCore (약종별 200개)</td><td>약종당 <b>정상 80장</b> → 메모리뱅크</td>
+      <td>약종당 <b>정상 20장</b>(오탐) + <b>불량</b>(탐지율)</td></tr>
+</table>
+<p class="sub">정상 80:20 분할 seed 42, ROI(bbox) 크롭 후 입력.</p>
+
+<h2>3. 모델 ① YOLO 약종 식별기</h2>
+<h3>3.1 학습 방법</h3>
+<table>
+  <tr><th>항목</th><th>설정</th></tr>
+  <tr><td>모델</td><td>YOLO11n (detection) — 사전학습 <code>yolo11n.pt</code>에서 200클래스(SKU) 파인튜닝</td></tr>
+  <tr><td>입력 / 에폭</td><td>imgsz 640 / 50 epochs</td></tr>
+  <tr><td>출력</td><td>알약 bbox + 클래스(=SKU 코드). 최고 신뢰도 박스를 약종으로 채택</td></tr>
+</table>
+<p class="sub">학습 검증 지표: Precision 0.995 · Recall 0.997 · mAP@0.5 0.995 · mAP@0.5:0.95 0.991.</p>
+<h3>3.2 테스트 결과 — 식별 정확도 (몇 건 중 몇 건)</h3>
+<table>
+  <tr><th>대상</th><th class="n">성공 / 전체</th><th class="n">정확도</th></tr>
+  <tr><td>정상 이미지 식별 (Top-1)</td><td class="n">19,995 / 20,000</td><td class="n good">99.98%</td></tr>
+  <tr><td>불량 이미지 식별 유지 (5종)</td><td class="n">3,996 / 4,000</td><td class="n good">99.90%</td></tr>
+  <tr><td><b>전체 식별</b></td><td class="n"><b>23,991 / 24,000</b></td><td class="n good"><b>99.96%</b></td></tr>
+</table>
+<p>합성 결함을 입혀도 약종 식별이 거의 그대로 유지(99.9%)되어, 생성 불량이 약의 시각적 정체성을 보존함을 확인.</p>
+<p class="warn note"><b>주의:</b> 테스트 정상이 YOLO 학습 이미지와 겹칠 수 있어 정상 Top-1(99.98%)은 다소 낙관적일 수 있다.
+불량 이미지는 학습에 미사용 → 불량 식별 유지율(99.9%)은 신뢰 가능한 강건성 지표.</p>
+
+<h2>4. 모델 ② PatchCore 이상탐지 (약종별 200개)</h2>
+<h3>4.1 학습 방법</h3>
+<p>그래디언트 학습이 없는 <b>메모리 기반 one-class 이상탐지</b>이다.</p>
+<table>
+  <tr><th>단계</th><th>내용</th></tr>
+  <tr><td>특징 추출</td><td>WideResNet50-2(ImageNet 사전학습, <b>동결</b>)의 layer2+layer3 패치 특징 (역전파 없음)</td></tr>
+  <tr><td>입력</td><td>bbox로 알약 ROI 크롭 → 배경 변동 제거</td></tr>
+  <tr><td>메모리뱅크</td><td>정상 80장 패치를 coreset(k-center greedy, 0.04)로 추려 약종당 <b>2,509 패치</b> 저장</td></tr>
+  <tr><td>이상점수 / 임계값</td><td>입력 패치의 뱅크 최소거리 중 <b>최댓값</b> / 약종별 정상 val 점수 <b>p99</b></td></tr>
+  <tr><td>산출물</td><td>약종별 <code>&lt;SKU&gt;.npz</code>(뱅크+임계값) × 200</td></tr>
+</table>
+
+<h3>4.2 테스트 결과 — 분리도 및 탐지율 (blur 제외)</h3>
+<div class="kpis">
+  <div class="kpi"><div class="v">0.982</div><div class="l">평균 AUROC</div></div>
+  <div class="kpi"><div class="v">0.994</div><div class="l">중앙값 AUROC</div></div>
+  <div class="kpi"><div class="v">94.8%</div><div class="l">불량 탐지율 (3,793/4,000)</div></div>
+  <div class="kpi"><div class="v">5.0%</div><div class="l">정상 오탐 (200/4,000)</div></div>
+</div>
+<figure>
+  <img src="figures/chart_type.png" alt="불량 유형별 탐지율">
+  <figcaption>그림 1. 불량 유형별 탐지율(Recall) — 형태 결함 4종은 99% 이상, 변색만 75.5%로 약점</figcaption>
+</figure>
+<figure>
+  <img src="figures/chart_auroc.png" alt="약종별 AUROC 분포">
+  <figcaption>그림 2. 약종별 AUROC 분포(200종, blur 제외) — 평균 0.982, 173/200종이 0.95 이상.
+  <b>의미:</b> 특정 약에 치우치지 않고 200종 전반에서 고르게 잘 분리되며, 소수 약종만 약하다.</figcaption>
+</figure>
+<table>
+  <tr><th>유형</th><th class="n">탐지 / 전체</th><th class="n">탐지율</th></tr>
+  <tr><td>crack (균열)</td><td class="n">800 / 800</td><td class="n good">100.0%</td></tr>
+  <tr><td>chip (깨짐)</td><td class="n">798 / 800</td><td class="n good">99.8%</td></tr>
+  <tr><td>dent (눌림)</td><td class="n">796 / 800</td><td class="n good">99.5%</td></tr>
+  <tr><td>contamination (오염)</td><td class="n">795 / 800</td><td class="n good">99.4%</td></tr>
+  <tr><td>discoloration (변색)</td><td class="n">604 / 800</td><td class="n bad">75.5%</td></tr>
+  <tr><td><b>합계(5종)</b></td><td class="n"><b>3,793 / 4,000</b></td><td class="n good"><b>94.8%</b></td></tr>
+</table>
+
+<h3>4.3 이상영역 시각화 (입력 vs 히트맵 대조)</h3>
+<figure>
+  <img src="figures/heatmap_grid.png" alt="유형별 입력 vs PatchCore 히트맵">
+  <figcaption>그림 3. 동일 알약(K-000043)의 유형별 결함에 대한 <b>입력 이미지 ↔ 이상 히트맵 대조</b>.
+  정상은 히트맵이 균일하게 낮고(파랑), 결함은 실제 손상 위치(균열 선·깨짐·오염점·눌림·변색)가 붉게 활성화된다(공통 색 스케일).</figcaption>
+</figure>
+
+<h3>4.4 점수 분리 분석</h3>
+<figure>
+  <img src="figures/chart_scoredist.png" alt="정상 vs 불량 점수 분포">
+  <figcaption>그림 4. 이상점수 분포(임계값으로 정규화, 경계=1.0). 정상은 임계값 바로 아래에 밀집,
+  불량 5종은 1.5 부근으로 뚜렷이 분리된다. 정상의 임계값 초과 꼬리가 오탐(~5%)에 해당.
+  <b>의미:</b> 정상·불량 점수가 뚜렷이 갈려(경계 겹침 작음) 탐지가 신뢰성 있게 작동함을 보여준다.</figcaption>
+</figure>
+<div style="display:flex;gap:14px;flex-wrap:wrap">
+  <figure style="flex:1 1 380px">
+    <img src="figures/chart_type_box.png" alt="유형별 점수 박스플롯">
+    <figcaption>그림 5. 유형별 점수 박스플롯. 형태 결함 4종은 임계값을 크게 상회하나,
+    <b>변색만 임계값(1.0)에 걸쳐</b> 일부가 미탐된다(약점 원인).
+    <b>의미:</b> 결함 유형별 탐지 난이도 차이 — 형태 결함은 강한 신호, 변색은 약한 신호(보완 대상).</figcaption>
+  </figure>
+  <figure style="flex:1 1 320px">
+    <img src="figures/chart_roc.png" alt="ROC 곡선">
+    <figcaption>그림 6. ROC 곡선(pooled, blur 제외) — AUC 0.982.
+    <b>의미:</b> 임계값과 무관하게 분류 성능이 매우 우수(불량이 정상보다 높은 점수일 확률 98.2%).</figcaption>
+  </figure>
+</div>
+
+<h3>4.5 약점 약종 (AUROC 하위 10)</h3>
+<table>
+  <tr><th>SKU</th><th class="n">AUROC</th><th>SKU</th><th class="n">AUROC</th></tr>
+  <tr><td>K-041267</td><td class="n">0.835</td><td>K-027777</td><td class="n">0.890</td></tr>
+  <tr><td>K-027733</td><td class="n">0.856</td><td>K-010411</td><td class="n">0.912</td></tr>
+  <tr><td>K-031090</td><td class="n">0.869</td><td>K-022412</td><td class="n">0.915</td></tr>
+  <tr><td>K-021828</td><td class="n">0.871</td><td>K-008901</td><td class="n">0.917</td></tr>
+  <tr><td>K-038290</td><td class="n">0.875</td><td>K-029644</td><td class="n">0.919</td></tr>
+</table>
+<p class="sub">추가 정상 데이터 확보 또는 결함 생성 방식 보완의 우선 후보.</p>
+<figure>
+  <img src="figures/disc_cases.png" alt="변색 탐지 성공 vs 실패">
+  <figcaption>그림 7. 변색(discoloration) <b>탐지 성공 3 vs 실패 3</b> — 입력 ↔ 히트맵 대조(점수는 임계값 대비 배수).
+  성공 케이스는 색 변화 부위가 임계값을 넘겨(빨강) 탐지되나, 실패 케이스는 활성이 임계값 아래(차갑게)에 머물러 미탐.
+  <b>의미:</b> 변색은 결함 신호가 약해 임계값 부근에 걸치므로, 옅은 변색일수록 미탐 위험이 크다(75.5%의 원인).</figcaption>
+</figure>
+
+<h3>4.6 임계값 민감도 분석 (변색 미탐 대응 검토)</h3>
+<p>변색 미탐(75.5%)을 줄이기 위해 약종별 임계값(정상 val p99, 평균 <b>2.26</b>)을 일괄 인하했을 때의 영향을 분석했다.</p>
+<table>
+  <tr><th>임계값</th><th class="n">FPR(정상 오탐)</th><th class="n">변색 Recall</th><th class="n">전체 Recall</th><th class="n">오탐 건수/4,000</th></tr>
+  <tr><td>×1.00 (현재)</td><td class="n">5.0%</td><td class="n">75.5%</td><td class="n">94.8%</td><td class="n">200</td></tr>
+  <tr><td>×0.95 (−5%)</td><td class="n">16.9%</td><td class="n">84.1%</td><td class="n">96.7%</td><td class="n">675</td></tr>
+  <tr><td>×0.90 (−10%)</td><td class="n bad">37.0%</td><td class="n">90.6%</td><td class="n">98.0%</td><td class="n">1,478</td></tr>
+  <tr><td>×0.80 (−20%)</td><td class="n bad">85.9%</td><td class="n">98.8%</td><td class="n">99.7%</td><td class="n">3,437</td></tr>
+</table>
+<figure>
+  <img src="figures/chart_threshold.png" alt="임계값 민감도 곡선">
+  <figcaption>그림 8. 임계값 인하율별 Recall·FPR. 변색 Recall은 완만히 오르지만 <b>FPR이 급격히 폭증</b>한다
+  (−10%에서 FPR 37%). <b>의미:</b> 정상 점수가 임계값 바로 아래에 밀집해, 임계값만 내리면 정상이 대량 오탐된다 →
+  <b>일괄 임계값 인하는 비권장</b>. 근본 해결은 색 특징 보강·정상 데이터 확충(§8 참고).</figcaption>
+</figure>
+
+<h2>5. End-to-End 캐스케이드 결과 (blur 제외)</h2>
+<p>입력 → YOLO 약종 식별 → 해당 약종 PatchCore 판정 전 과정 적용(정상 20,000 + 불량 5종 4,000):</p>
+<table>
+  <tr><th>실제 \ 판정</th><th class="n">정상</th><th class="n">불량</th><th class="n">검토</th><th class="n">합계</th></tr>
+  <tr><td>정상</td><td class="n good">19,799</td><td class="n">201</td><td class="n">0</td><td class="n">20,000</td></tr>
+  <tr><td>불량(5종)</td><td class="n">~202</td><td class="n good">3,792</td><td class="n">~6</td><td class="n">4,000</td></tr>
+</table>
+<ul>
+  <li>불량 탐지(캐스케이드): <b>3,792 / 4,000 (94.8%)</b></li>
+  <li>정상 오탐: 201 / 20,000 (1.0%)</li>
+</ul>
+<p class="warn note"><b>주의:</b> E2E 정상은 메모리뱅크 학습에 쓰인 정상(약종당 80장)을 포함하므로 오탐 1.0%는 낙관적이다.
+<b>공정한 오탐율은 §4.2의 held-out 기준 5.0%(200/4,000)</b>로 본다.</p>
+
+<h2>6. 한계 및 보완점</h2>
+<ul>
+  <li><b>임계값 표본 부족:</b> 약종별 임계값을 정상 val 20장의 p99로 산정 → 오탐율이 ~5%. 정상 검증 데이터를 늘리면 임계값이 안정화된다.</li>
+  <li><b>YOLO 정상 식별 누수:</b> 테스트 정상이 학습셋과 겹쳐 정상 Top-1이 낙관적일 수 있음(불량 식별 유지율은 신뢰 가능).</li>
+  <li><b>변색(discoloration) 취약:</b> 탐지율 75.5%. 미세·전역적 색 변화는 패치 거리로 잡기 어려움 → 생성 강도/현실성 점검 및 보강 필요.</li>
+  <li><b>합성 불량:</b> 실제 제조 불량이 아닌 합성 데이터 검증 결과. 실불량 셋 확보 시 재검증 권장.</li>
+</ul>
+
+<h2>7. 결론</h2>
+<p>200종 전체에서 <b>약종 식별 99.96%</b>, <b>이상탐지 평균 AUROC 0.982 · 불량 탐지율 94.8%</b>(blur 제외)를 달성하였다.
+합성 불량은 약종 식별을 해치지 않으면서(식별 유지 99.9%) 평균 AUROC 0.98 수준으로 탐지 가능함이 정량 확인되어,
+<b>불량 데이터 생성 방식의 유효성</b>이 입증되었다. 형태 결함(균열·깨짐·눌림·오염)은 99% 이상 탐지하며,
+변색과 임계값 캘리브레이션이 향후 보완 과제로 남는다.</p>
+
+<h2>8. 향후 개선 방향 (변색 미탐 중심)</h2>
+<p>§4.6에서 보듯 임계값 인하만으로는 변색을 못 잡으므로, 신호 자체를 키우는 접근이 필요하다. 비용 대비 효과순:</p>
+<table>
+  <tr><th>우선</th><th>방법</th><th>설명 / 기대효과</th><th>비용</th></tr>
+  <tr><td>1</td><td><b>색 특징 추가</b></td><td>WideResNet 특징(질감 위주)은 색에 둔감 → LAB/HSV 색·채도 통계를 패치 특징에 결합해 변색 신호 강화. 학습 불필요</td><td>낮음</td></tr>
+  <tr><td>2</td><td><b>정상 색 프로파일 대조</b></td><td>약종별 정상 평균 색 대비 편차맵을 별도 산출해 PatchCore 점수와 융합</td><td>낮음</td></tr>
+  <tr><td>3</td><td><b>정상 데이터 확충</b></td><td>약종당 정상 수↑ → 뱅크·임계값 안정화(현재 FPR 5%→1% 목표). 약점 SKU 우선</td><td>중간</td></tr>
+  <tr><td>4</td><td><b>특징추출기 도메인 적응</b></td><td>WideResNet을 알약 이미지로 자기지도 미세조정 → 색·미세결함 민감도↑ (이것이 "더 학습")</td><td>중간</td></tr>
+  <tr><td>5</td><td><b>합성 변색 지도학습</b></td><td>보유한 합성 변색을 양성으로 쓰는 보조 분류기/세그멘테이션. 변색 특화 탐지 (단 합성 스타일 과적합 주의)</td><td>중간</td></tr>
+  <tr><td>6</td><td><b>review 밴드</b></td><td>경계 부근 점수는 합/불 대신 "검토"로 분기 → 오탐·미탐 동시 완화(운영 보완)</td><td>낮음</td></tr>
+</table>
+<p class="note"><b>"학습을 더?"</b> — PatchCore 자체는 역전파 학습이 없어 "더 학습"의 대상이 아니다(정상 패치 저장량만 늘 뿐).
+실효적 추가 학습은 ④ <b>특징추출기 도메인 적응</b> 또는 ⑤ <b>합성 변색 지도학습</b>이며, 그 전에 ①② <b>색 특징 보강</b>(무학습)이 가장 가성비가 높다.</p>
+<p class="sub">그 외: 실제 불량 샘플 확보로 합성 검증 교차검증, 이미지당 지연시간 측정.</p>
+
+<h2>부록. 재현 정보</h2>
+<table>
+  <tr><td>식별 모델</td><td>YOLO11n detection, imgsz 640, 50 epochs, 200 classes</td></tr>
+  <tr><td>이상탐지</td><td>PatchCore, WideResNet50-2(frozen) layer2+3, ROI crop, coreset 0.04(뱅크 2,509 패치), 임계값 p99</td></tr>
+  <tr><td>분할/시드</td><td>정상 80:20, seed 42 · 불량 정의에서 blur 제외</td></tr>
+  <tr><td>평가 환경</td><td>GCP NVIDIA L4 GPU, torch 2.9(CUDA)</td></tr>
+  <tr><td>산출물</td><td>PatchCore 뱅크 200개(<code>.npz</code>), <code>metrics_200.json</code>, <code>patchcore_scores.json</code>, <code>figures/</code></td></tr>
+</table>
+<p class="sub">수치 출처: <code>metrics_200.json</code> + <code>patchcore_scores.json</code> 집계(blur 제외 재계산). 그림: <code>figures/</code>.</p>
+</html>

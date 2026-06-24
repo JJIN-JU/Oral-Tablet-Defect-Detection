@@ -93,9 +93,9 @@ https://aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&aihubDataSe=
 | 정상 오탐 (FPR) | 5.0% |
 
 <p align="center">
-  <img src="output/eval200/figures/chart_type.png" width="46%">
+  <img src="docs/figures/chart_type.png" width="46%">
   &nbsp;
-  <img src="output/eval200/figures/heatmap_hero.png" width="46%">
+  <img src="docs/figures/heatmap_hero.png" width="46%">
 </p>
 
 > 형태 결함(균열·깨짐·눌림·오염) 99%+ 탐지. 히트맵이 실제 손상 위치를 활성화.
