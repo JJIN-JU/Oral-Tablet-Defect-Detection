@@ -93,7 +93,7 @@ https://aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&aihubDataSe=
 | 정상 오탐 (FPR) | 5.0% |
 
 <p align="center">
-  <img src="docs/figures/chart_type.png" width="46%">
+  <img src="docs/figures/heatmap_grid.png" width="46%">
   &nbsp;
   <img src="docs/figures/heatmap_hero.png" width="46%">
 </p>
