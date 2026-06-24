@@ -82,6 +82,24 @@ model = YOLO(
 )
 
 # =====================================================
+# 약품명 매핑 (SKU 코드 -> 사람이 읽는 약품명)
+# 파일 없으면 빈 dict -> 코드 그대로 노출(폴백)
+# =====================================================
+
+import json
+
+_NAMES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "drug_names.json"
+)
+
+try:
+    with open(_NAMES_PATH, encoding="utf-8") as _f:
+        DRUG_NAMES = json.load(_f)
+except (OSError, ValueError):
+    DRUG_NAMES = {}
+
+# =====================================================
 # PatchCore
 # =====================================================
 
@@ -213,17 +231,23 @@ async def predict(
             boxes.conf[best_idx]
         )
 
-        drug_name = (
+        drug_id = (
             model.names[cls_id]
         )
 
+        # SKU 코드 -> 약품명 (매핑 없으면 코드 그대로)
+        drug_name = DRUG_NAMES.get(
+            drug_id,
+            drug_id
+        )
+
         # -------------------------
-        # PatchCore npz
+        # PatchCore npz  (파일명은 SKU 코드)
         # -------------------------
 
         npz_path = os.path.join(
             r"C:\Users\human3_12\Desktop\project1\Models\patchcore_200",
-            f"{drug_name}.npz"
+            f"{drug_id}.npz"
         )
 
         if not os.path.exists(
