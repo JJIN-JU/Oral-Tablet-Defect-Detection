@@ -32,6 +32,9 @@ flowchart LR
 
 ## 4. 데이터
 
+데이터 source : AIHUB 경구약제 이미지 데이터
+https://aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&aihubDataSe=data&dataSetSn=576
+
 | 항목 | 값 |
 |---|---|
 | 약종(SKU) | **200종** |
