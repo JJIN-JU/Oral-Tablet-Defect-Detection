@@ -35,7 +35,7 @@ flowchart LR
 데이터 source : AIHUB 경구약제 이미지 데이터 (경구약제 4024종)
 https://aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&aihubDataSe=data&dataSetSn=576
 
-# 경구정제 2972종 중 중 총 200종의 정제 선정 기준
+### 경구정제 2972종 중 중 총 200종의 정제 선정 기준
 **1) 데이터 범위**
 - Training 데이터만 사용
 - 경구 정제(Tablet)만 사용
