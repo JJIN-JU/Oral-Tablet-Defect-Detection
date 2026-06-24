@@ -1,4 +1,4 @@
-# 경구 알약 불량 탐지 (Oral Pill Defect Detection)
+# 경구 정제 알약 불량 탐지 (Oral Tablet Defect Detection)
 
 > 알약 사진 한 장으로 **약종 식별 → 정상/불량 판정**. YOLO + PatchCore 2단계 캐스케이드 · Firebase 파이프라인.
 
