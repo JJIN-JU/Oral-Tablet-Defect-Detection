@@ -177,21 +177,19 @@ def make_heatmap_overlay(
         cv2.NORM_MINMAX
     ).astype(np.uint8)
 
-    threshold = 180  # 0~255
+    # continuous JET colormap overlay (blue = low -> red = high anomaly)
+    hmc = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
 
-    mask = heatmap > threshold
+    overlay = cv2.addWeighted(base, 1 - alpha, hmc, alpha, 0)
 
-    overlay = base.copy()
+    # side-by-side: original (left) | heatmap (right)
+    sep = np.full((h, 6, 3), 255, dtype=np.uint8)
 
-    overlay[mask] = (
-        overlay[mask] * 0.4
-        + np.array([0, 0, 255]) * 0.6
-    ).astype(np.uint8)
-
+    side_by_side = np.hstack([base, sep, overlay])
 
     ok, buf = cv2.imencode(
         ".jpg",
-        overlay
+        side_by_side
     )
 
     if not ok:
@@ -372,16 +370,11 @@ async def predict(
             score >= threshold
         )
 
-        if is_defect:
-            
-            heatmap_image = make_heatmap_overlay(
+        # always return the [original | heatmap] side-by-side (normal + defect)
+        heatmap_image = make_heatmap_overlay(
             heatmap,
             crop_path
         )
-
-        else:
-            
-            heatmap_image = None
 
 
         # -------------------------

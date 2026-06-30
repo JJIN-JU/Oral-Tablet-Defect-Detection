@@ -1,0 +1,14 @@
+# FastAPI inference server (Python 3.10-3.11). GPU recommended.
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+fastapi
+uvicorn
+python-multipart
+ultralytics
+torch>=2.2
+torchvision
+opencv-python
+numpy
+pillow
+firebase-admin
+# PatchCore backbone = DINOv2 ViT-S/14, fetched at runtime via torch.hub
+# (facebookresearch/dinov2) - internet required on first run.

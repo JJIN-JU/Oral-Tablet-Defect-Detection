@@ -255,7 +255,7 @@ Blur Score : ${data["blur_score"]}
                 const SizedBox(height: 10),
 
                 const Text(
-                  "AI 이상 의심 영역",
+                  "원본 vs AI 히트맵",
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -277,7 +277,7 @@ Blur Score : ${data["blur_score"]}
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 25),
                   child: Text(
-                    "AI가 정상 데이터와 다른 특징을 감지한 영역입니다.",
+                    "왼쪽=원본, 오른쪽=AI 히트맵(빨강=정상과 차이가 큰 의심 영역).",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.grey,
